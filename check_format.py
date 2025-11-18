@@ -8,6 +8,8 @@ from zipfile import BadZipFile, ZipFile
 
 ASSIGNMENT_NAME = "hw1"
 FILENAME_PATTERN = re.compile(r"^(\d{8})_" + ASSIGNMENT_NAME + r"\.zip$")
+REQUIRED_HTML_TAGS = ("<html", "<head", "<body")
+CSS_LINK_PATTERN = re.compile(r"<link[^>]+href=\"[^\"]+\.css\"", re.IGNORECASE)
 
 
 def parse_args():
@@ -35,13 +37,12 @@ def parse_args():
 def _has_required_html_tags(content):
     """Return True if the HTML content includes <html>, <head>, and <body> tags."""
     lowered = content.lower()
-    return all(tag in lowered for tag in ("<html", "<head", "<body"))
+    return all(tag in lowered for tag in REQUIRED_HTML_TAGS)
 
 
 def _has_css_link(content):
     """Return True if the HTML content includes a <link> tag referencing a CSS file."""
-    link_pattern = re.compile(r"<link[^>]+href=\"[^\"]+\.css\"", re.IGNORECASE)
-    return bool(link_pattern.search(content))
+    return bool(CSS_LINK_PATTERN.search(content))
 
 
 def check_zip_file(zip_path):
@@ -61,9 +62,10 @@ def check_zip_file(zip_path):
     try:
         with ZipFile(zip_path, "r") as archive:
             names = archive.namelist()
-            index_present = "index.html" in names
-            style_present = "style.css" in names
-            css_style_present = "css/style.css" in names
+            name_set = set(names)
+            index_present = "index.html" in name_set
+            style_present = "style.css" in name_set
+            css_style_present = "css/style.css" in name_set
 
             for name in names:
                 if name.lower().endswith(".zip"):

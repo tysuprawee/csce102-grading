@@ -154,46 +154,54 @@ def check_zip_file(zip_path):
     filename = zip_path.name
     issues = []
 
-    # We now ignore filename pattern; student_id is unknown
+    # student_id ignored now
     student_id = None
-
     index_content = None
+    index_name = None
 
     try:
         with ZipFile(zip_path, "r") as archive:
             names = archive.namelist()
-            name_set = set(names)
-            index_present = "index.html" in name_set
-            style_present = "style.css" in name_set
-            css_style_present = "css/style.css" in name_set
 
+            # ---- 1. Detect nested ZIPs ----
             for name in names:
                 if name.lower().endswith(".zip"):
                     issues.append(f"Nested zip found: {name}")
 
-            if not index_present:
-                issues.append("No index.html found at zip root.")
+            # ---- 2. Find index.html anywhere ----
+            for name in names:
+                if name.lower().endswith("index.html"):
+                    index_name = name
+                    break
+
+            if index_name is None:
+                issues.append("No index.html found anywhere in the zip.")
             else:
                 try:
-                    with archive.open("index.html") as html_file:
+                    with archive.open(index_name) as html_file:
                         index_content = html_file.read().decode("utf-8", errors="ignore")
-                except KeyError:
-                    issues.append("Could not read index.html from the zip archive.")
+                except Exception:
+                    issues.append(f"Could not read {index_name}.")
                     index_content = None
 
-            if not (style_present or css_style_present):
-                issues.append(
-                    "No style.css found. Expected style.css at root or css/style.css."
-                )
+            # ---- 3. Look for ANY CSS file ----
+            css_found = False
+            for name in names:
+                if name.lower().endswith(".css"):
+                    css_found = True
+                    break
+
+            if not css_found:
+                issues.append("No CSS file found (expected at least one .css anywhere).")
+
     except (FileNotFoundError, BadZipFile, OSError):
         issues.append("Could not open zip file (corrupted or invalid).")
 
+    # ---- 4. If HTML found, run HTML checks ----
     if index_content is not None:
-        # Basic structure and tag closure checks
         issues.extend(_check_basic_html_structure(index_content))
         issues.extend(_check_tag_balance(index_content))
 
-        # Check for CSS link
         if not _has_css_link(index_content):
             issues.append("index.html does not link to a CSS file.")
 

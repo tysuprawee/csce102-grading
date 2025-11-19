@@ -153,11 +153,12 @@ def check_zip_file(zip_path):
     """Inspect a single ZIP file and return its report dictionary."""
     filename = zip_path.name
     issues = []
+    warnings = []
 
-    # student_id ignored now
+    # We ignore filename pattern; student_id is unknown
     student_id = None
     index_content = None
-    index_name = None
+    primary_html_name = None
 
     try:
         with ZipFile(zip_path, "r") as archive:
@@ -168,42 +169,62 @@ def check_zip_file(zip_path):
                 if name.lower().endswith(".zip"):
                     issues.append(f"Nested zip found: {name}")
 
-            # ---- 2. Find index.html anywhere ----
-            for name in names:
-                if name.lower().endswith("index.html"):
-                    index_name = name
-                    break
+            # ---- 2. Find ALL .html files ----
+            html_files = [name for name in names if name.lower().endswith(".html")]
 
-            if index_name is None:
-                issues.append("No index.html found anywhere in the zip.")
+            if not html_files:
+                issues.append("No HTML files found in the zip.")
             else:
+                # Prefer index.html if present
+                index_candidates = [
+                    name for name in html_files
+                    if name.lower().endswith("index.html")
+                ]
+
+                if index_candidates:
+                    primary_html_name = index_candidates[0]
+                else:
+                    # No index.html → fall back to first .html file
+                    primary_html_name = html_files[0]
+                    warnings.append(
+                        f"No index.html found; using {primary_html_name} for HTML validation."
+                    )
+
+                # Warn (but do not fail) if there are multiple HTML files
+                if len(html_files) > 1:
+                    warnings.append(
+                        "Multiple HTML files found; using "
+                        f"{primary_html_name} for structural checks."
+                    )
+
+                # Try to read the chosen HTML file
                 try:
-                    with archive.open(index_name) as html_file:
+                    with archive.open(primary_html_name) as html_file:
                         index_content = html_file.read().decode("utf-8", errors="ignore")
                 except Exception:
-                    issues.append(f"Could not read {index_name}.")
+                    issues.append(f"Could not read {primary_html_name}.")
                     index_content = None
 
             # ---- 3. Look for ANY CSS file ----
-            css_found = False
-            for name in names:
-                if name.lower().endswith(".css"):
-                    css_found = True
-                    break
+            css_found = any(name.lower().endswith(".css") for name in names)
 
             if not css_found:
-                issues.append("No CSS file found (expected at least one .css anywhere).")
+                issues.append(
+                    "No CSS file found (expected at least one .css file anywhere in the zip)."
+                )
 
     except (FileNotFoundError, BadZipFile, OSError):
         issues.append("Could not open zip file (corrupted or invalid).")
 
-    # ---- 4. If HTML found, run HTML checks ----
+    # ---- 4. If we have HTML content, run HTML checks ----
     if index_content is not None:
         issues.extend(_check_basic_html_structure(index_content))
         issues.extend(_check_tag_balance(index_content))
 
         if not _has_css_link(index_content):
-            issues.append("index.html does not link to a CSS file.")
+            issues.append(
+                f"{primary_html_name} does not link to a CSS file via <link ... href=\"*.css\">."
+            )
 
     report = {
         "student_id": student_id,
@@ -211,9 +232,9 @@ def check_zip_file(zip_path):
         "assignment": ASSIGNMENT_NAME,
         "format_ok": len(issues) == 0,
         "format_issues": issues,
+        "warnings": warnings,
     }
     return report
-
 
 def main():
     """Entry point for the script."""

@@ -27,7 +27,9 @@ finds.
 
 3.  Inspect the generated JSON reports inside the output directory.\
     Each report has the same name as the ZIP file, but with a `.json`
-    extension.
+    extension. A consolidated `grading.txt` file is also written inside
+    the output directory with a per-submission score (out of 100) and a
+    list of individual deductions.
 
 ## What the checker validates
 

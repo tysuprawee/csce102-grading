@@ -9,6 +9,8 @@ from zipfile import BadZipFile, ZipFile
 
 ASSIGNMENT_NAME = "hw1"
 CSS_LINK_PATTERN = re.compile(r"<link[^>]+href=\"[^\"]+\.css\"", re.IGNORECASE)
+STARTING_SCORE = 100
+POINTS_PER_ISSUE = 5
 
 
 def parse_args():
@@ -226,6 +228,8 @@ def check_zip_file(zip_path):
                 f"{primary_html_name} does not link to a CSS file via <link ... href=\"*.css\">."
             )
 
+    score = max(0, STARTING_SCORE - POINTS_PER_ISSUE * len(issues))
+
     report = {
         "student_id": student_id,
         "filename": filename,
@@ -233,12 +237,15 @@ def check_zip_file(zip_path):
         "format_ok": len(issues) == 0,
         "format_issues": issues,
         "warnings": warnings,
+        "score": score,
     }
     return report
 
 def main():
     """Entry point for the script."""
     submissions_dir, reports_dir = parse_args()
+
+    grading_entries = []
 
     for zip_path in sorted(submissions_dir.iterdir()):
         if not zip_path.is_file() or zip_path.suffix.lower() != ".zip":
@@ -248,6 +255,25 @@ def main():
         with output_path.open("w", encoding="utf-8") as report_file:
             json.dump(report, report_file, indent=2)
             report_file.write("\n")
+
+        entry_lines = [
+            f"Submission: {report['filename']}",
+            f"Score: {report['score']}/{STARTING_SCORE}",
+            "Deductions:",
+        ]
+
+        if report["format_issues"]:
+            for issue in report["format_issues"]:
+                entry_lines.append(f" - {issue}")
+        else:
+            entry_lines.append(" - None. All required checks passed.")
+
+        entry_lines.append("")  # Blank line between entries
+        grading_entries.append("\n".join(entry_lines))
+
+    if grading_entries:
+        grading_path = reports_dir / "grading.txt"
+        grading_path.write_text("\n".join(grading_entries), encoding="utf-8")
 
 
 if __name__ == "__main__":
